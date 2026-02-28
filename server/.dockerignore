@@ -9,9 +9,6 @@ venv/
 *.egg-info/
 .eggs/
 
-# Dependencies
-requirements.txt
-
 # Build
 build/
 dist/
