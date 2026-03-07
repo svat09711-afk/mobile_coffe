@@ -2,16 +2,14 @@ from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 SECRET_KEY = "your-secret-key-change-in-production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-# Default admin credentials (change in production!)
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "admin123"
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -22,12 +20,16 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def authenticate_user(username: str, password: str) -> Optional[dict]:
-    if username != ADMIN_USERNAME:
+async def authenticate_user(db: AsyncSession, username: str, password: str) -> Optional[dict]:
+    from models import User
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+    
+    if not user:
         return None
-    if not verify_password(password, ADMIN_PASSWORD):
+    if not verify_password(password, user.hashed_password):
         return None
-    return {"username": username}
+    return {"id": user.id, "username": user.username, "email": user.email}
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:

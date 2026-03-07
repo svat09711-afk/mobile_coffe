@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from jose import jwt
 
 from database import get_db
-from models import Coffee, Order, OrderItem
+from models import Coffee, Order, OrderItem, User
 from schemas import (
     CoffeeCreate,
     CoffeeResponse,
@@ -14,11 +14,14 @@ from schemas import (
     OrderCreate,
     OrderResponse,
     OrderStatusUpdate,
+    UserCreate,
+    UserResponse,
 )
 from auth import (
     authenticate_user,
     create_access_token,
     decode_access_token,
+    get_password_hash,
     ACCESS_TOKEN_EXPIRE_MINUTES,
     SECRET_KEY,
     ALGORITHM,
@@ -33,13 +36,49 @@ class Token(BaseModel):
     token_type: str
 
 
+@router.post("/auth/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register(
+    user_data: UserCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Register a new user."""
+    # Check if username already exists
+    result = await db.execute(select(User).where(User.username == user_data.username))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+
+    # Check if email already exists
+    result = await db.execute(select(User).where(User.email == user_data.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+
+    # Create new user
+    hashed_password = get_password_hash(user_data.password)
+    db_user = User(
+        username=user_data.username,
+        email=user_data.email,
+        hashed_password=hashed_password,
+    )
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user
+
+
 @router.post("/auth/login", response_model=Token)
 async def login(
     username: str = Form(...),
-    password: str = Form(...)
+    password: str = Form(...),
+    db: AsyncSession = Depends(get_db)
 ):
     """Authenticate user and return JWT token."""
-    user = authenticate_user(username, password)
+    user = await authenticate_user(db, username, password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

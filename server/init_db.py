@@ -3,7 +3,8 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy import select
 
 from database import DATABASE_URL, Base
-from models import Coffee
+from models import Coffee, User
+from auth import get_password_hash
 
 COFFEES_DATA = [
     {
@@ -48,28 +49,61 @@ COFFEES_DATA = [
     },
 ]
 
+USERS_DATA = [
+    {
+        "username": "admin",
+        "email": "admin@coffee.com",
+        "password": "admin123"
+    },
+    {
+        "username": "john_doe",
+        "email": "john@example.com",
+        "password": "password123"
+    },
+    {
+        "username": "jane_smith",
+        "email": "jane@example.com",
+        "password": "password123"
+    },
+]
+
 
 async def init_db():
     engine = create_async_engine(DATABASE_URL, echo=True)
     async_session_maker = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-    
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     async with async_session_maker() as session:
         for coffee_data in COFFEES_DATA:
             result = await session.execute(select(Coffee).where(Coffee.id == coffee_data["id"]))
             existing = result.scalar_one_or_none()
-            
+
             if not existing:
                 coffee = Coffee(**coffee_data)
                 session.add(coffee)
                 print(f"Added: {coffee_data['name']}")
             else:
                 print(f"Exists: {coffee_data['name']}")
-        
+
+        for user_data in USERS_DATA:
+            result = await session.execute(select(User).where(User.username == user_data["username"]))
+            existing = result.scalar_one_or_none()
+
+            if not existing:
+                user = User(
+                    username=user_data["username"],
+                    email=user_data["email"],
+                    hashed_password=get_password_hash(user_data["password"])
+                )
+                session.add(user)
+                print(f"Added user: {user_data['username']}")
+            else:
+                print(f"User exists: {user_data['username']}")
+
         await session.commit()
-    
+
     await engine.dispose()
     print("\nDatabase initialized successfully!")
 
