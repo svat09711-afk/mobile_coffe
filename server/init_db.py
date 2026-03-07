@@ -89,9 +89,9 @@ async def init_db():
 
         for user_data in USERS_DATA:
             result = await session.execute(select(User).where(User.username == user_data["username"]))
-            existing = result.scalar_one_or_none()
+            existing_user = result.scalar_one_or_none()
 
-            if not existing:
+            if not existing_user:
                 user = User(
                     username=user_data["username"],
                     email=user_data["email"],
@@ -100,7 +100,9 @@ async def init_db():
                 session.add(user)
                 print(f"Added user: {user_data['username']}")
             else:
-                print(f"User exists: {user_data['username']}")
+                # Update password if changed
+                existing_user.hashed_password = get_password_hash(user_data["password"])
+                print(f"Updated password for: {user_data['username']}")
 
         await session.commit()
 
